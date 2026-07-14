@@ -10,14 +10,16 @@ Claude Desktop ──(stdio)──▶ mcp-remote ──(Streamable HTTP)──�
 ```
 
 This whole path — zaia serving, and `mcp-remote` bridging stdio to it — has
-been verified working end-to-end with a real MCP client handshake. The one
-step that can't be verified from a terminal is Claude Desktop's own UI
-picking up the tools; that's the final manual check in Step 5.
+been verified working end-to-end with a real MCP client handshake (see
+Step 4, which uses [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
+to verify zaia directly, no Claude Desktop required). The one step that
+can't be verified from a terminal is Claude Desktop's own UI picking up the
+tools; that's the final manual check in Step 6.
 
 ## Prerequisites
 
 - Python 3.10+ (for zeus/zaia)
-- [Node.js](https://nodejs.org/) (`npx` runs the `mcp-remote` bridge)
+- [Node.js](https://nodejs.org/) (`npx` runs the `mcp-remote` bridge and MCP Inspector)
 - [Claude Desktop](https://claude.ai/download) installed
 
 ## Step 1 — Generate data
@@ -77,7 +79,77 @@ Once zaia is connected, these exercise the tools above in a natural order:
 - "Show me 10 rows from raw_sales" → `get_table`
 - "What are the top 5 brands by sales volume in pharma_sales?" → `query`
 
-## Step 4 — Add zaia to Claude Desktop
+Two more using the `pharma_sales` dataset specifically — one that just pulls
+rows straight from a table, and one that requires the model to reason across
+tables:
+
+- **Direct table pull**: "Show me 10 rows from raw_products in pharma_sales."
+  This maps straight to `get_table(dataset="pharma_sales", table="raw_products")`
+  — no SQL, no joins, just raw rows back.
+- **Cross-table reasoning**: "In pharma_sales, which therapeutic area had the
+  highest total gross revenue in 2023, broken down by region?" This can't be
+  answered by one `get_table` call — the model has to `describe_table` its way
+  across `raw_sales`, `raw_products` (for `therapeutic_area`), and
+  `raw_countries` (for `region`), then write a `query` that joins and
+  aggregates them.
+
+## Step 4 — Verify with MCP Inspector
+
+Before wiring zaia into Claude Desktop, it's worth confirming the server
+itself actually works. [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
+is the official dev tool for this — it talks MCP directly, with no LLM
+client (and no `mcp-remote` bridge) in between, since Inspector supports
+Streamable HTTP natively. `zaia serve` must already be running (Step 2).
+
+### Interactive UI
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+This opens a browser UI (`http://localhost:6274` by default). Set:
+
+- **Transport Type**: `Streamable HTTP`
+- **URL**: `http://127.0.0.1:8000/mcp`
+
+then click **Connect**. From there you can browse zaia's five tools and the
+`zaia://{dataset}/schema` resource, fill in arguments through a form, and
+inspect the raw request/response JSON for each call.
+
+### CLI mode (scriptable, no browser)
+
+Every example below has been run against a live zaia instance:
+
+```bash
+# List all tools and their schemas
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp \
+  --method tools/list
+
+# list_datasets — discovery entry point
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp \
+  --method tools/call --tool-name list_datasets
+
+# describe_table — columns + one sample row
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp \
+  --method tools/call --tool-name describe_table \
+  --tool-arg dataset=pharma_sales --tool-arg table=raw_sales
+
+# query — arbitrary read-only SQL
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp \
+  --method tools/call --tool-name query \
+  --tool-arg dataset=pharma_sales \
+  --tool-arg "sql=SELECT brand_name, SUM(units_sold) AS total_units FROM raw_sales GROUP BY brand_name ORDER BY total_units DESC LIMIT 5"
+
+# Read the schema resource for a dataset
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp \
+  --method resources/read --uri "zaia://pharma_sales/schema"
+```
+
+CLI mode is the faster loop for iterating on `data.py`/`server.py` changes —
+no need to click through a UI to check a tool's output shape, and it's easy
+to script as a smoke test.
+
+## Step 5 — Add zaia to Claude Desktop
 
 Open Claude Desktop's config file and add a `zaia` entry under `mcpServers`:
 
@@ -97,7 +169,7 @@ Open Claude Desktop's config file and add a `zaia` entry under `mcpServers`:
 
 If zaia is running on a different host/port, change the URL to match.
 
-## Step 5 — Restart & verify
+## Step 6 — Restart & verify
 
 Start `zaia serve` first (Step 2), then restart Claude Desktop. Open the
 tools/connectors view and confirm `zaia` is listed with its five tools
@@ -117,3 +189,7 @@ Try one of the example prompts above to confirm it can actually reach data.
 - **`mcp-remote` seems to be running a stale version** — `npx -y` re-resolves
   the package each run, but if you suspect a bad cache, clear it with
   `npx clear-npx-cache` and try again.
+- **MCP Inspector can't connect** — same root cause as above: `zaia serve`
+  must be running first. Double check the URL includes the `/mcp` path
+  (`http://127.0.0.1:8000/mcp`, not just the bare host:port) and that the
+  Transport Type is set to `Streamable HTTP`, not `SSE`.
