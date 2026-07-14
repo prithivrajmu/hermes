@@ -19,7 +19,7 @@ Already cloned without that flag? Run `git submodule update --init --recursive`.
 |---|----------|---------|--------|
 | 1 | [`zeus/`](./zeus) | Synthetic data generator. Produces raw source tables for two use cases — **patient history at a US insurance firm** and **pharma brand sales across countries** — with referential integrity and deliberate messy rows, ready for an ETL/ELT pipeline to build mart tables. Extensible: new use cases plug in as generator modules. | ✅ v0.1 |
 | 2 | [`zaia/`](./zaia) | MCP server. Exposes the zeus-generated datasets through MCP tools/resources so an LLM client can query them. Serves over Streamable HTTP. | ✅ v0.1 |
-| 3 | MCP client | Initially **Claude Desktop** acts as the client (no code needed — just a `claude_desktop_config.json` entry pointing at zaia). A custom client may follow later. | ⬜ Planned |
+| 3 | MCP client | Initially **Claude Desktop** acts as the client (no code needed — just a `claude_desktop_config.json` entry pointing at zaia). A custom client may follow later. See [`docs/client-setup.md`](./docs/client-setup.md) for the full walkthrough. | ✅ v0.1 |
 
 ## Repo Layout
 
