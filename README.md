@@ -1,9 +1,10 @@
 # Hermes
 
 Monorepo for an end-to-end MCP (Model Context Protocol) stack, built in three major stages.
-`zeus/` and `maia/` are git submodules backed by their own standalone repos
+`zeus/`, `maia/` and `odysseus/` are git submodules backed by their own standalone repos
 ([`prithivrajmu/zeus`](https://github.com/prithivrajmu/zeus),
-[`prithivrajmu/maia`](https://github.com/prithivrajmu/zaia) — repo rename pending, see below).
+[`prithivrajmu/maia`](https://github.com/prithivrajmu/zaia) — repo rename pending, see below,
+[`prithivrajmu/odysseus`](https://github.com/prithivrajmu/odysseus)).
 
 ### Why "Hermes"?
 
@@ -20,15 +21,16 @@ git clone --recurse-submodules https://github.com/prithivrajmu/hermes.git
 
 Already cloned without that flag? Run `git submodule update --init --recursive`.
 
-Both submodules use [uv](https://docs.astral.sh/uv/); see their READMEs for setup.
+`zeus` and `maia` use [uv](https://docs.astral.sh/uv/); see their READMEs for setup.
 
-## The Three Builds
+## The Builds
 
 | # | Sub-repo | Purpose |
 |---|----------|---------|
 | 1 | [`zeus/`](./zeus) | Synthetic data generator. Produces raw source tables for two use cases — patient history at a US insurance firm and pharma brand sales across countries — with referential integrity and deliberate messy rows, ready for an ETL/ELT pipeline to build mart tables. Extensible: new use cases plug in as generator modules. |
 | 2 | [`maia/`](./maia) | MCP server. Exposes the zeus-generated datasets through MCP tools/resources so an LLM client can query them. Serves over Streamable HTTP. |
 | 3 | MCP client | **Claude Desktop** acts as the client (no code needed — just a `claude_desktop_config.json` entry pointing at maia). See [`docs/client-setup.md`](./docs/client-setup.md) for the full walkthrough. |
+| + | [`odysseus/`](./odysseus) | ARGOS ELT pipeline (pure Snowflake SQL, Dynamic Tables). Turns zeus's raw tables (`brand1_aa`) into conformed multi-brand marts and per-brand serving views for an analytics dashboard. Separate from the MCP path; deploys independently to Snowflake. |
 
 ## Repo Layout
 
@@ -38,6 +40,7 @@ hermes/
 ├── README.md
 ├── .gitmodules
 ├── docs/            # Client setup guides
+├── odysseus/        # git submodule → prithivrajmu/odysseus (ARGOS ELT pipeline, Snowflake)
 ├── zeus/            # git submodule → prithivrajmu/zeus (Build 1 — data generation)
 └── maia/            # git submodule → prithivrajmu/zaia (Build 2 — MCP server, repo rename pending)
 ```

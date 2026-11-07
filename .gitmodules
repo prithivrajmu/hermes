@@ -4,3 +4,6 @@
 [submodule "maia"]
 	path = maia
 	url = https://github.com/prithivrajmu/maia.git
+[submodule "odysseus"]
+	path = odysseus
+	url = https://github.com/prithivrajmu/odysseus.git

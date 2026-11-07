@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repo structure
 
-Hermes is a monorepo wrapping an end-to-end MCP (Model Context Protocol) stack, built in three stages. `zeus/` and `maia/` are **git submodules** backed by their own standalone repos (`prithivrajmu/zeus`, `prithivrajmu/zaia` — GitHub repo rename to `prithivrajmu/maia` pending) — commits inside those directories belong to the submodule's own history, not hermes'. After cloning fresh, run `git submodule update --init --recursive` if the clone didn't use `--recurse-submodules`.
+Hermes is a monorepo wrapping an end-to-end MCP (Model Context Protocol) stack, built in three stages. `zeus/`, `maia/` and `odysseus/` are **git submodules** backed by their own standalone repos (`prithivrajmu/zeus`, `prithivrajmu/zaia` — GitHub repo rename to `prithivrajmu/maia` pending) — commits inside those directories belong to the submodule's own history, not hermes'. After cloning fresh, run `git submodule update --init --recursive` if the clone didn't use `--recurse-submodules`.
 
 | # | Dir | Purpose |
 |---|-----|---------|
@@ -14,7 +14,7 @@ Hermes is a monorepo wrapping an end-to-end MCP (Model Context Protocol) stack, 
 
 Data flow: `zeus generate` → sqlite db per use case in `zeus/output/<use_case>/<use_case>.db` → `maia serve --data-dir` scans that tree → MCP tools/resources over Streamable HTTP → `mcp-remote` bridge (stdio↔HTTP) → Claude Desktop.
 
-`odysseus/` also sits in this checkout but is **neither a submodule nor tracked by hermes** — it's its own standalone git repo (`prithivrajmu/odysseus`, own `.git`, shows as untracked here; see `odysseus/docs/07_repository.md`). It's the ARGOS ELT pipeline (Snowflake Dynamic Tables) that consumes zeus output; see the odysseus section below. Don't `git add odysseus` from hermes; commit inside it.
+`odysseus/` is a third **git submodule** (`prithivrajmu/odysseus`, branch `main`) — the ARGOS ELT pipeline (Snowflake Dynamic Tables) that consumes zeus output; see the odysseus section below. It is pointer-only: its CI, deploys and releases live in its own repo (hermes has no odysseus workflow), and commits go inside `odysseus/`, then a hermes commit bumps the pointer. Rationale: `odysseus/docs/07_repository.md`.
 
 Each submodule has its own README with full details; this file covers cross-cutting architecture and commands.
 
@@ -79,4 +79,4 @@ python -m pytest tests -q
 python -m pytest tests/test_serving_contract.py -q
 ```
 
-CI: `.github/workflows/odysseus-ci.yml` (in hermes, untracked) overlaps odysseus's own `odysseus/.github/workflows/ci.yml`; keep the env-var/secret names (`ARGOS_TEST_BACKEND`, `SNOWFLAKE_*`) identical in both.
+CI lives only in `odysseus/.github/workflows/ci.yml` (the DuckDB job runs on every push/PR; the Snowflake job runs on `main` when `SNOWFLAKE_*` secrets exist). Env var is `ARGOS_TEST_BACKEND`.
