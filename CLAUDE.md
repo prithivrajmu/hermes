@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repo structure
 
-Hermes is a monorepo wrapping an end-to-end MCP (Model Context Protocol) stack, built in three stages. `zeus/`, `maia/` and `odysseus/` are **git submodules** backed by their own standalone repos (`prithivrajmu/zeus`, `prithivrajmu/zaia` — GitHub repo rename to `prithivrajmu/maia` pending) — commits inside those directories belong to the submodule's own history, not hermes'. After cloning fresh, run `git submodule update --init --recursive` if the clone didn't use `--recurse-submodules`.
+Hermes is a monorepo wrapping an end-to-end MCP (Model Context Protocol) stack, built in three stages plus a downstream ELT pipeline. `zeus/`, `maia/` and `odysseus/` are **git submodules** backed by their own standalone repos (`prithivrajmu/zeus`, `prithivrajmu/maia`, `prithivrajmu/odysseus`) — commits inside those directories belong to the submodule's own history, not hermes'. After cloning fresh, run `git submodule update --init --recursive` if the clone didn't use `--recurse-submodules`.
 
 | # | Dir | Purpose |
 |---|-----|---------|
@@ -14,13 +14,13 @@ Hermes is a monorepo wrapping an end-to-end MCP (Model Context Protocol) stack, 
 
 Data flow: `zeus generate` → sqlite db per use case in `zeus/output/<use_case>/<use_case>.db` → `maia serve --data-dir` scans that tree → MCP tools/resources over Streamable HTTP → `mcp-remote` bridge (stdio↔HTTP) → Claude Desktop.
 
-`odysseus/` is a third **git submodule** (`prithivrajmu/odysseus`, branch `main`) — the ARGOS ELT pipeline (Snowflake Dynamic Tables) that consumes zeus output; see the odysseus section below. It is pointer-only: its CI, deploys and releases live in its own repo (hermes has no odysseus workflow), and commits go inside `odysseus/`, then a hermes commit bumps the pointer. Rationale: `odysseus/docs/07_repository.md`.
+`odysseus/` (branch `main`) is the ARGOS ELT pipeline (Snowflake Dynamic Tables) that consumes zeus output; see the odysseus section below. It is pointer-only: its CI, deploys and releases live in its own repo (hermes has no odysseus workflow), and commits go inside `odysseus/`, then a hermes commit bumps the pointer. Rationale: `odysseus/docs/07_repository.md`.
 
 Each submodule has its own README with full details; this file covers cross-cutting architecture and commands.
 
 ## Commands
 
-Both submodules use `pyproject.toml` + hatchling and are managed independently with [uv](https://docs.astral.sh/uv/):
+`zeus` and `maia` use `pyproject.toml` + hatchling and are managed independently with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 cd zeus && uv sync
@@ -52,7 +52,7 @@ cd ../maia && uv run maia serve --data-dir ../zeus/output --host 127.0.0.1 --por
 - `core/base.py` — `BaseGenerator` (abstract) + `GeneratorConfig` (count, seed, locale, free-form `options` dict). Subclasses set `name`/`description` and implement either `generate()` (single-table, yields dict records) or `generate_tables()` (multi-table, returns `{table_name: [records]}` with consistent foreign keys across tables). `self.rng` and `self.faker` are seeded together for determinism; `self.opt(key, default)` reads CLI `-o key=value` options.
 - `core/registry.py` — `@register` decorator self-registers generator classes into a module-level dict keyed by `name`; `get(name)` looks them up. New use cases must be imported in `generators/__init__.py` to trigger registration (import has side effects — this is not optional).
 - `core/writer.py` — output writers for json/jsonl/csv/sqlite.
-- `generators/` — one module per use case. `example.py` is the single-table template; `patient_history.py` and `pharma_sales.py` model the multi-table raw-source pattern with FK integrity and ~1% injected messy rows (disable via `-o clean=true`).
+- `generators/` — one module per use case. `example.py` is the single-table template; `patient_history.py`, `pharma_sales.py` and `brand1_aa.py` (15 tables, feeds odysseus; `zeus generate brand1_aa -f csv`) model the multi-table raw-source pattern with FK integrity and ~1% injected messy rows (disable via `-o clean=true`).
 - To add a use case: copy the closest template, give it a unique `name`, implement `generate()` or `generate_tables()`, and import the module in `generators/__init__.py`.
 
 ## maia architecture (MCP server)
@@ -79,4 +79,4 @@ python -m pytest tests -q
 python -m pytest tests/test_serving_contract.py -q
 ```
 
-CI lives only in `odysseus/.github/workflows/ci.yml` (the DuckDB job runs on every push/PR; the Snowflake job runs on `main` when `SNOWFLAKE_*` secrets exist). Env var is `ARGOS_TEST_BACKEND`.
+CI lives only in `odysseus/.github/workflows/ci.yml` (the DuckDB job runs on every push/PR; the Snowflake job runs on `main` in the `argos-test` environment when `SNOWFLAKE_*` secrets exist). Env var is `ARGOS_TEST_BACKEND`.

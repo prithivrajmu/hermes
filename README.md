@@ -1,9 +1,9 @@
 # Hermes
 
-Monorepo for an end-to-end MCP (Model Context Protocol) stack, built in three major stages.
+Monorepo for an end-to-end MCP (Model Context Protocol) stack, built in three major stages, plus a downstream ELT pipeline (`odysseus/`).
 `zeus/`, `maia/` and `odysseus/` are git submodules backed by their own standalone repos
 ([`prithivrajmu/zeus`](https://github.com/prithivrajmu/zeus),
-[`prithivrajmu/maia`](https://github.com/prithivrajmu/zaia) — repo rename pending, see below,
+[`prithivrajmu/maia`](https://github.com/prithivrajmu/maia),
 [`prithivrajmu/odysseus`](https://github.com/prithivrajmu/odysseus)).
 
 ### Why "Hermes"?
@@ -21,7 +21,7 @@ git clone --recurse-submodules https://github.com/prithivrajmu/hermes.git
 
 Already cloned without that flag? Run `git submodule update --init --recursive`.
 
-`zeus` and `maia` use [uv](https://docs.astral.sh/uv/); see their READMEs for setup.
+`zeus` and `maia` use [uv](https://docs.astral.sh/uv/); `odysseus` uses pip + pytest (see `odysseus/README.md`). See each README for setup.
 
 ## The Builds
 
@@ -42,7 +42,7 @@ hermes/
 ├── docs/            # Client setup guides
 ├── odysseus/        # git submodule → prithivrajmu/odysseus (ARGOS ELT pipeline, Snowflake)
 ├── zeus/            # git submodule → prithivrajmu/zeus (Build 1 — data generation)
-└── maia/            # git submodule → prithivrajmu/zaia (Build 2 — MCP server, repo rename pending)
+└── maia/            # git submodule → prithivrajmu/maia (Build 2 — MCP server)
 ```
 
 ## Flow
@@ -52,6 +52,8 @@ zeus (generate) ──▶ datasets (json / jsonl / csv / sqlite)
                         │
                         ▼
 maia (MCP server, Streamable HTTP) ──▶ mcp-remote bridge ──▶ Claude Desktop (MCP client)
+
+zeus (csv) ──▶ odysseus (Snowflake ELT: RAW → STG → CORE → MART → SERVING) ──▶ analytics dashboard
 ```
 
 ## License
