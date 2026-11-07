@@ -14,6 +14,8 @@ Hermes is a monorepo wrapping an end-to-end MCP (Model Context Protocol) stack, 
 
 Data flow: `zeus generate` → sqlite db per use case in `zeus/output/<use_case>/<use_case>.db` → `maia serve --data-dir` scans that tree → MCP tools/resources over Streamable HTTP → `mcp-remote` bridge (stdio↔HTTP) → Claude Desktop.
 
+`odysseus/` also sits in this checkout but is **neither a submodule nor tracked by hermes** — it's its own standalone git repo (`prithivrajmu/odysseus`, own `.git`, shows as untracked here; see `odysseus/docs/07_repository.md`). It's the ARGOS ELT pipeline (Snowflake Dynamic Tables) that consumes zeus output; see the odysseus section below. Don't `git add odysseus` from hermes; commit inside it.
+
 Each submodule has its own README with full details; this file covers cross-cutting architecture and commands.
 
 ## Commands
@@ -60,3 +62,21 @@ cd ../maia && uv run maia serve --data-dir ../zeus/output --host 127.0.0.1 --por
 - `cli.py` — typer CLI, single `maia serve` command.
 
 When adding a new MCP tool, add the logic to `data.py` first (with a unit test that has no MCP dependency), then wire a thin tool wrapper in `server.py`.
+
+## odysseus architecture (ARGOS ELT pipeline, standalone repo)
+
+Pure Snowflake SQL — no dbt, no external orchestrator. Layers run in numbered-directory order under `sql/`: `00_setup` (platform, RAW tables, seeds) → `10_staging` (STG views) → `20_core` (dims/facts as Dynamic Tables) → `30_sem` (metric views) → `40_mart` (mart Dynamic Tables) → `50_serving` (`sp_generate_brand_views()` emits per-brand `SERVING.<brand>_<mart>` secure views). Dynamic Tables infer the refresh DAG from the tables they read; `TARGET_LAG` drives refresh.
+
+- **Brand is a column, never a schema/table name.** Every fact leads with `brand_id`; onboarding a brand = a `seed_brand` row + re-run the serving proc, no new tables.
+- Environment = database (`ARGOS_DEV/TEST/PROD`), passed to the SQL files as the `$argos_db` session variable (`IDENTIFIER($argos_db)`). Deploy with `cd odysseus && ./deploy.sh ARGOS_DEV [snow-connection]` (needs the Snowflake CLI `snow`; the RAW load step is commented out in `deploy.sh` until CSVs are staged).
+- `contracts/` (JSON Schema → generated TS types, `@argos/contracts`) is the source of truth for the Next.js consumer. After editing `contracts/schemas/argos.schema.json`, run `npm run generate` in `contracts/` (`npm run check` fails on a stale `generated/`).
+
+Tests (run from `odysseus/`): the same files run against two backends, picked by `ARGOS_TEST_BACKEND` (`duckdb` default, or `snowflake` + `SNOWFLAKE_*` creds). The DuckDB surrogate transpiles the Snowflake SQL with sqlglot over RAW data generated in-process by zeus (`brand1_aa` generator), so Snowflake-only syntax changes can break `surrogate.py` even when the SQL is valid.
+
+```bash
+cd odysseus && pip install -r tests/requirements-test.txt
+python -m pytest tests -q
+python -m pytest tests/test_serving_contract.py -q
+```
+
+CI: `.github/workflows/odysseus-ci.yml` (in hermes, untracked) overlaps odysseus's own `odysseus/.github/workflows/ci.yml`; keep the env-var/secret names (`ARGOS_TEST_BACKEND`, `SNOWFLAKE_*`) identical in both.
